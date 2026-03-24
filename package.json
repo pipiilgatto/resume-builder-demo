@@ -10,6 +10,10 @@
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.3.2",
+    "@react-pdf/types": "^2.9.2",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",

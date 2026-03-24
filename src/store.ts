@@ -5,6 +5,16 @@ interface ResumeStore {
   selectedTemplate: string | null
   setSelectedTemplate: (template: string) => void
   
+  // Template customization
+  fontFamily: string
+  setFontFamily: (font: string) => void
+  fontSize: string
+  setFontSize: (size: string) => void
+  colorScheme: string
+  setColorScheme: (scheme: string) => void
+  marginSize: string
+  setMarginSize: (margin: string) => void
+  
   // Step 2
   jobDescription: string
   setJobDescription: (desc: string) => void
@@ -27,6 +37,16 @@ interface ResumeStore {
 export const useResumeStore = create<ResumeStore>((set) => ({
   selectedTemplate: null,
   setSelectedTemplate: (template) => set({ selectedTemplate: template }),
+  
+  // Template customization defaults
+  fontFamily: 'Helvetica',
+  setFontFamily: (font) => set({ fontFamily: font }),
+  fontSize: 'medium',
+  setFontSize: (size) => set({ fontSize: size }),
+  colorScheme: 'blue',
+  setColorScheme: (scheme) => set({ colorScheme: scheme }),
+  marginSize: 'normal',
+  setMarginSize: (margin) => set({ marginSize: margin }),
   
   jobDescription: '',
   setJobDescription: (desc) => set({ jobDescription: desc }),

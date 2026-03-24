@@ -1,15 +1,93 @@
+import { useState } from 'react'
 import { useResumeStore } from '../store'
+import { parseResumeFile, structureResumeText } from '../utils/fileParser'
 
 const templates = [
-  { id: 'modern', name: 'Modern', description: 'Clean, minimalist design', color: 'bg-blue-100' },
-  { id: 'classic', name: 'Classic', description: 'Traditional professional layout', color: 'bg-green-100' },
-  { id: 'creative', name: 'Creative', description: 'For design & marketing roles', color: 'bg-purple-100' },
-  { id: 'executive', name: 'Executive', description: 'Bold, leadership-focused', color: 'bg-amber-100' },
-  { id: 'compact', name: 'Compact', description: 'One-page dense layout', color: 'bg-gray-100' },
+  { id: 'modern', name: 'Modern', description: 'Clean, minimalist design', color: 'bg-blue-100', accent: 'blue' },
+  { id: 'classic', name: 'Classic', description: 'Traditional professional layout', color: 'bg-green-100', accent: 'green' },
+  { id: 'creative', name: 'Creative', description: 'For design & marketing roles', color: 'bg-purple-100', accent: 'purple' },
+  { id: 'executive', name: 'Executive', description: 'Bold, leadership-focused', color: 'bg-amber-100', accent: 'amber' },
+  { id: 'compact', name: 'Compact', description: 'One-page dense layout', color: 'bg-gray-100', accent: 'gray' },
+]
+
+const fontOptions = [
+  { id: 'Helvetica', name: 'Helvetica (Sans-serif)' },
+  { id: 'Times-Roman', name: 'Times New Roman (Serif)' },
+  { id: 'Courier', name: 'Courier (Monospace)' },
+]
+
+const sizeOptions = [
+  { id: 'small', name: 'Small', desc: '10pt' },
+  { id: 'medium', name: 'Medium', desc: '11pt' },
+  { id: 'large', name: 'Large', desc: '12pt' },
+]
+
+const marginOptions = [
+  { id: 'narrow', name: 'Narrow', desc: '0.5 inch' },
+  { id: 'normal', name: 'Normal', desc: '1 inch' },
+  { id: 'wide', name: 'Wide', desc: '1.5 inch' },
+]
+
+const colorOptions = [
+  { id: 'blue', name: 'Blue', hex: '#3B82F6' },
+  { id: 'green', name: 'Green', hex: '#10B981' },
+  { id: 'purple', name: 'Purple', hex: '#8B5CF6' },
+  { id: 'amber', name: 'Amber', hex: '#F59E0B' },
+  { id: 'red', name: 'Red', hex: '#EF4444' },
+  { id: 'gray', name: 'Gray', hex: '#6B7280' },
 ]
 
 export default function Step1() {
-  const { selectedTemplate, setSelectedTemplate, setCurrentStep } = useResumeStore()
+  const { 
+    selectedTemplate, setSelectedTemplate, 
+    setCurrentStep, setResumeEn,
+    fontFamily, setFontFamily,
+    fontSize, setFontSize,
+    marginSize, setMarginSize,
+    colorScheme, setColorScheme
+  } = useResumeStore()
+  
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [showCustomize, setShowCustomize] = useState(false)
+  
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    
+    setUploadError(null)
+    setUploadSuccess(false)
+    setIsUploading(true)
+    
+    try {
+      const { text } = await parseResumeFile(file)
+      const structured = structureResumeText(text)
+      setResumeEn(structured)
+      
+      if (!selectedTemplate) {
+        setSelectedTemplate('modern')
+      }
+      
+      setUploadSuccess(true)
+      alert(`Resume uploaded! Extracted ${text.length} characters.\n\nProceed to Step 2 to edit and translate.`)
+    } catch (error: any) {
+      console.error('Upload failed:', error)
+      setUploadError(error.message || 'Failed to parse file.')
+      
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const text = e.target?.result as string
+        setResumeEn({ rawText: text, name: '', contact: '', sections: {} })
+        setUploadSuccess(true)
+        alert('File uploaded as plain text.')
+      }
+      reader.readAsText(file)
+    } finally {
+      setIsUploading(false)
+      event.target.value = ''
+    }
+  }
   
   const handleNext = () => {
     if (!selectedTemplate) {
@@ -23,6 +101,7 @@ export default function Step1() {
     <div>
       <h2 className="text-2xl font-semibold text-gray-800 mb-6">Choose a Template</h2>
       
+      {/* Template Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {templates.map((template) => (
           <div
@@ -35,38 +114,153 @@ export default function Step1() {
             </div>
             <h3 className="text-lg font-medium text-gray-800">{template.name}</h3>
             <p className="text-gray-600 mt-1">{template.description}</p>
-            <div className="mt-4 text-sm text-gray-500">
-              • Adjustable sections<br/>
-              • Custom fonts & margins<br/>
-              • Bilingual support
-            </div>
           </div>
         ))}
       </div>
       
+      {/* Customize Button */}
+      {selectedTemplate && (
+        <div className="mb-6">
+          <button
+            onClick={() => setShowCustomize(!showCustomize)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+          >
+            <span>⚙️</span>
+            <span className="font-medium">{showCustomize ? 'Hide Customization' : 'Customize Template'}</span>
+          </button>
+        </div>
+      )}
+      
+      {/* Customization Panel */}
+      {showCustomize && selectedTemplate && (
+        <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Template Customization</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Font Family */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Font Family</label>
+              <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg bg-white"
+              >
+                {fontOptions.map(font => (
+                  <option key={font.id} value={font.id}>{font.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Font Size */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Font Size</label>
+              <div className="flex gap-2">
+                {sizeOptions.map(size => (
+                  <button
+                    key={size.id}
+                    onClick={() => setFontSize(size.id)}
+                    className={`flex-1 px-3 py-2 border rounded-lg transition ${fontSize === size.id ? 'bg-blue-100 border-blue-500' : 'bg-white hover:bg-gray-50'}`}
+                  >
+                    <div className="text-xs">{size.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Margins */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Page Margins</label>
+              <div className="flex gap-2">
+                {marginOptions.map(margin => (
+                  <button
+                    key={margin.id}
+                    onClick={() => setMarginSize(margin.id)}
+                    className={`flex-1 px-3 py-2 border rounded-lg transition ${marginSize === margin.id ? 'bg-blue-100 border-blue-500' : 'bg-white hover:bg-gray-50'}`}
+                  >
+                    <div className="text-xs">{margin.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Color Scheme */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Accent Color</label>
+              <div className="flex gap-2 flex-wrap">
+                {colorOptions.map(color => (
+                  <button
+                    key={color.id}
+                    onClick={() => setColorScheme(color.id)}
+                    className={`w-8 h-8 rounded-full border-2 transition ${colorScheme === color.id ? 'border-gray-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                    style={{ backgroundColor: color.hex }}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Preview */}
+          <div className="mt-6 p-4 bg-white rounded-lg border">
+            <p className="text-sm text-gray-600 mb-2">Current Settings:</p>
+            <div className="flex gap-4 text-xs text-gray-500">
+              <span>Font: {fontOptions.find(f => f.id === fontFamily)?.name}</span>
+              <span>•</span>
+              <span>Size: {sizeOptions.find(s => s.id === fontSize)?.desc}</span>
+              <span>•</span>
+              <span>Margin: {marginOptions.find(m => m.id === marginSize)?.desc}</span>
+              <span>•</span>
+              <span>Color: {colorOptions.find(c => c.id === colorScheme)?.name}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Upload Status */}
+      {(uploadError || uploadSuccess) && (
+        <div className={`mb-6 p-4 rounded-lg ${uploadError ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+          <p className={uploadError ? 'text-red-800' : 'text-green-800'}>
+            {uploadError ? '❌ ' + uploadError : '✅ Resume uploaded successfully!'}
+          </p>
+        </div>
+      )}
+      
+      {/* Actions */}
       <div className="flex justify-between items-center pt-6 border-t">
         <div>
           <p className="text-gray-700">
             Selected: <span className="font-semibold">{selectedTemplate ? templates.find(t => t.id === selectedTemplate)?.name : 'None'}</span>
           </p>
-          <p className="text-sm text-gray-500 mt-1">You can customize fonts, margins, and section order after selection.</p>
         </div>
         
         <div className="flex gap-4">
-          <button
-            className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
-            onClick={() => {/* upload resume */}}
+          <input
+            type="file"
+            id="resume-upload"
+            accept=".pdf,.docx,.txt"
+            className="hidden"
+            onChange={handleFileUpload}
+            disabled={isUploading}
+          />
+          <label
+            htmlFor="resume-upload"
+            className={`px-6 py-3 rounded-lg transition cursor-pointer ${isUploading ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'}`}
           >
-            Upload Resume (PDF/Word)
-          </button>
+            {isUploading ? 'Parsing...' : '📤 Upload Resume'}
+          </label>
           <button
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             onClick={handleNext}
             disabled={!selectedTemplate}
           >
             Next: Fill & Translate →
           </button>
         </div>
+      </div>
+      
+      {/* Supported Formats */}
+      <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
+        <p className="font-medium">Supported: PDF, Word (.docx), TXT</p>
       </div>
     </div>
   )

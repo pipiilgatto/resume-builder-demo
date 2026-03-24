@@ -1,8 +1,10 @@
 import { useResumeStore } from '../store'
 import { useState } from 'react'
+import { pdf } from '@react-pdf/renderer'
+import ResumePDF from './ResumePDF'
 
 export default function Step3() {
-  const { setCurrentStep } = useResumeStore()
+  const { setCurrentStep, selectedTemplate } = useResumeStore()
   const [enContent, setEnContent] = useState(`John Doe
 Senior Software Engineer
 john.doe@email.com • (123) 456-7890 • linkedin.com/in/johndoe
@@ -45,18 +47,92 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
 计算机科学硕士 – 斯坦福大学 (2018)
 软件工程学士 – 麻省理工学院 (2016)`)
 
-  const handleDownload = (lang: 'en' | 'zh') => {
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+
+  const handleDownload = async (lang: 'en' | 'zh') => {
     const content = lang === 'en' ? enContent : zhContent
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `resume_${lang}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    alert(`Downloaded ${lang.toUpperCase()} resume as text file. In a real app, this would be a formatted PDF.`)
+    setIsGeneratingPDF(true)
+    
+    try {
+      // Generate PDF
+      const pdfBlob = await pdf(
+        <ResumePDF 
+          content={content} 
+          language={lang}
+          template={selectedTemplate || 'modern'}
+        />
+      ).toBlob()
+      
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `resume_${lang}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      alert(`Downloaded ${lang.toUpperCase()} resume as PDF.`)
+    } catch (error) {
+      console.error('PDF generation failed:', error)
+      // Fallback to text download
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `resume_${lang}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      alert(`PDF generation failed. Downloaded ${lang.toUpperCase()} resume as text file instead.`)
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handleDownloadBoth = async () => {
+    setIsGeneratingPDF(true)
+    try {
+      // Generate both PDFs
+      const enPdfBlob = await pdf(
+        <ResumePDF content={enContent} language="en" template={selectedTemplate || 'modern'} />
+      ).toBlob()
+      
+      const zhPdfBlob = await pdf(
+        <ResumePDF content={zhContent} language="zh" template={selectedTemplate || 'modern'} />
+      ).toBlob()
+      
+      // Download English
+      const enUrl = URL.createObjectURL(enPdfBlob)
+      const enA = document.createElement('a')
+      enA.href = enUrl
+      enA.download = 'resume_en.pdf'
+      document.body.appendChild(enA)
+      enA.click()
+      document.body.removeChild(enA)
+      URL.revokeObjectURL(enUrl)
+      
+      // Small delay before second download
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Download Chinese
+      const zhUrl = URL.createObjectURL(zhPdfBlob)
+      const zhA = document.createElement('a')
+      zhA.href = zhUrl
+      zhA.download = 'resume_zh.pdf'
+      document.body.appendChild(zhA)
+      zhA.click()
+      document.body.removeChild(zhA)
+      URL.revokeObjectURL(zhUrl)
+      
+      alert('Both English and Chinese resumes downloaded as PDFs!')
+    } catch (error) {
+      console.error('PDF generation failed:', error)
+      alert('Failed to generate PDFs. Please try downloading individually.')
+    } finally {
+      setIsGeneratingPDF(false)
+    }
   }
 
   return (
@@ -71,16 +147,17 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
             ← Back
           </button>
           <button
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            onClick={() => alert('Both resumes downloaded! (Demo)')}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            onClick={handleDownloadBoth}
+            disabled={isGeneratingPDF}
           >
-            Download Both
+            {isGeneratingPDF ? 'Generating PDFs...' : 'Download Both'}
           </button>
         </div>
       </div>
 
       <p className="text-gray-600 mb-8">
-        Review and edit your English and Chinese resumes side‑by‑side. Make final adjustments, then download each version.
+        Review and edit your English and Chinese resumes side‑by‑side. Make final adjustments, then download each version as PDF.
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -89,10 +166,11 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-medium text-gray-800">English Resume</h3>
             <button
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               onClick={() => handleDownload('en')}
+              disabled={isGeneratingPDF}
             >
-              Download EN
+              {isGeneratingPDF ? 'Generating...' : 'Download PDF'}
             </button>
           </div>
           
@@ -115,10 +193,11 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-medium text-gray-800">中文简历</h3>
             <button
-              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               onClick={() => handleDownload('zh')}
+              disabled={isGeneratingPDF}
             >
-              下载中文
+              {isGeneratingPDF ? '生成中...' : '下载PDF'}
             </button>
           </div>
           
@@ -141,6 +220,7 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
         <h4 className="text-lg font-medium text-blue-800 mb-2">Next Steps</h4>
         <ul className="list-disc pl-5 text-blue-700 space-y-1">
           <li>Your resumes are saved in browser storage (localStorage).</li>
+          <li>Click "Download PDF" to generate professionally formatted resumes.</li>
           <li>To deploy to GitHub Pages: run <code className="bg-white px-2 py-1 rounded text-sm">npm run deploy</code></li>
           <li>For production use, connect a real translation API (DeepSeek) and implement PDF generation.</li>
           <li>Add user accounts, more templates, and advanced customization.</li>
@@ -154,7 +234,7 @@ Python, React, AWS, Docker, Kubernetes, TypeScript, PostgreSQL, Git
           </button>
           <button
             className="px-6 py-3 bg-blue-700 text-white rounded-lg hover:bg-blue-800"
-            onClick={() => alert('Demo complete! The app is fully functional.')}
+            onClick={() => alert('Demo complete! The app is fully functional with PDF export.')}
           >
             Finish
           </button>

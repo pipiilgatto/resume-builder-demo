@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useResumeStore } from '../store'
+import { callDeepSeek, createImprovementPrompt } from '../utils/deepseek'
 
 export default function Step2() {
   const { jobDescription, setJobDescription, setCurrentStep, deepseekApiKey, setDeepseekApiKey } = useResumeStore()
   const [isChinese, setIsChinese] = useState(false)
   const [chatMessage, setChatMessage] = useState('')
   const [chatHistory, setChatHistory] = useState<Array<{role: 'user' | 'ai', content: string}>>([])
+  const [isLoading, setIsLoading] = useState(false)
   
   const handleSendMessage = async () => {
     if (!chatMessage.trim()) return
@@ -15,13 +17,43 @@ export default function Step2() {
     setChatHistory(newHistory)
     setChatMessage('')
     
-    // Mock AI response (replace with DeepSeek API)
-    setTimeout(() => {
-      setChatHistory([...newHistory, {
-        role: 'ai',
-        content: 'I suggest emphasizing your Python experience in the Skills section and adding metrics to your project bullet points.'
-      }])
-    }, 1000)
+    if (deepseekApiKey) {
+      setIsLoading(true)
+      try {
+        const prompt = createImprovementPrompt(
+          '[Resume content would be here]', // In a real app, pass actual resume content
+          jobDescription || 'No job description provided'
+        )
+        const aiResponse = await callDeepSeek(deepseekApiKey, prompt, 'You are a resume expert. Provide concise, actionable suggestions.')
+        setChatHistory([...newHistory, { role: 'ai', content: aiResponse }])
+      } catch (error: any) {
+        setChatHistory([...newHistory, { 
+          role: 'ai', 
+          content: `Error calling DeepSeek API: ${error.message}. Using mock suggestion.` 
+        }])
+        // Fallback to mock after a delay
+        setTimeout(() => {
+          setChatHistory(prev => {
+            // Replace the error message with mock
+            const filtered = prev.filter(msg => !(msg.role === 'ai' && msg.content.includes('Error')))
+            return [...filtered, {
+              role: 'ai',
+              content: 'I suggest emphasizing your Python experience in the Skills section and adding metrics to your project bullet points.'
+            }]
+          })
+        }, 500)
+      } finally {
+        setIsLoading(false)
+      }
+    } else {
+      // Mock AI response if no API key
+      setTimeout(() => {
+        setChatHistory([...newHistory, {
+          role: 'ai',
+          content: 'I suggest emphasizing your Python experience in the Skills section and adding metrics to your project bullet points. (Provide a DeepSeek API key for real AI suggestions)'
+        }])
+      }, 1000)
+    }
   }
   
   const handleDeepSeekTranslate = async () => {
@@ -114,10 +146,11 @@ export default function Step2() {
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               />
               <button
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleSendMessage}
+                disabled={isLoading}
               >
-                Send
+                {isLoading ? 'Thinking...' : 'Send'}
               </button>
             </div>
           </div>

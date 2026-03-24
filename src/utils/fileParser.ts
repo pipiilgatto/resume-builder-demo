@@ -5,6 +5,18 @@
  */
 export async function parsePDF(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Check file size (max 10MB for PDF parsing)
+    if (file.size > 10 * 1024 * 1024) {
+      reject(new Error('PDF file is too large (max 10MB). Please compress or use a smaller file.'))
+      return
+    }
+    
+    // Check if file appears to be a PDF (basic check)
+    if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      reject(new Error('File does not appear to be a PDF. Please upload a .pdf file.'))
+      return
+    }
+    
     const reader = new FileReader()
     
     reader.onload = async (event) => {
@@ -14,14 +26,41 @@ export async function parsePDF(file: File): Promise<string> {
         const data = event.target?.result as ArrayBuffer
         const pdfData = new Uint8Array(data)
         const result = await pdfParse.default(pdfData)
+        
+        // Check if any text was extracted
+        if (!result.text || result.text.trim().length === 0) {
+          reject(new Error('PDF parsed but no text found. This may be a scanned/image-based PDF. Please use a text-based PDF or manually paste your resume.'))
+          return
+        }
+        
+        // Check if text extraction seems reasonable (at least 50 characters)
+        if (result.text.length < 50) {
+          console.warn('PDF extracted very little text:', result.text.length, 'characters')
+          // Still resolve, but warn user
+        }
+        
         resolve(result.text)
-      } catch (error) {
+      } catch (error: any) {
         console.error('PDF parsing failed:', error)
-        reject(new Error('Failed to parse PDF. The file may be corrupted or encrypted.'))
+        
+        // More specific error messages based on error type
+        let errorMessage = 'Failed to parse PDF. '
+        
+        if (error.message && error.message.includes('encrypted')) {
+          errorMessage += 'The PDF is password-protected or encrypted. Please remove password protection.'
+        } else if (error.message && error.message.includes('corrupt')) {
+          errorMessage += 'The PDF appears to be corrupted. Try opening it in a PDF viewer first.'
+        } else if (error.message && error.message.includes('version')) {
+          errorMessage += 'Unsupported PDF version. Try saving as PDF 1.4 or later.'
+        } else {
+          errorMessage += 'The file may be corrupted, encrypted, or scanned (image-based). Try converting to a text-based PDF.'
+        }
+        
+        reject(new Error(errorMessage))
       }
     }
     
-    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onerror = () => reject(new Error('Failed to read file. The file may be in use or corrupted.'))
     reader.readAsArrayBuffer(file)
   })
 }

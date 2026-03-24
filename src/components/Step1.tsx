@@ -51,6 +51,8 @@ export default function Step1() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [showCustomize, setShowCustomize] = useState(false)
+  const [showManualEntry, setShowManualEntry] = useState(false)
+  const [manualText, setManualText] = useState('')
   
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -59,6 +61,7 @@ export default function Step1() {
     setUploadError(null)
     setUploadSuccess(false)
     setIsUploading(true)
+    setShowManualEntry(false) // Hide manual entry when uploading new file
     
     try {
       const { text } = await parseResumeFile(file)
@@ -75,18 +78,44 @@ export default function Step1() {
       console.error('Upload failed:', error)
       setUploadError(error.message || 'Failed to parse file.')
       
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const text = e.target?.result as string
-        setResumeEn({ rawText: text, name: '', contact: '', sections: {} })
-        setUploadSuccess(true)
-        alert('File uploaded as plain text.')
+      // Try to read as plain text as fallback
+      try {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const text = e.target?.result as string
+          if (text && text.trim().length > 0) {
+            setResumeEn({ rawText: text, name: '', contact: '', sections: {} })
+            setUploadSuccess(true)
+            alert('File uploaded as plain text (some formatting may be lost).')
+          }
+        }
+        reader.readAsText(file)
+      } catch (fallbackError) {
+        // Ignore fallback error
       }
-      reader.readAsText(file)
     } finally {
       setIsUploading(false)
       event.target.value = ''
     }
+  }
+  
+  const handleUseManualText = () => {
+    if (!manualText.trim()) {
+      alert('Please enter your resume text.')
+      return
+    }
+    
+    const structured = structureResumeText(manualText)
+    setResumeEn(structured)
+    setUploadSuccess(true)
+    setUploadError(null)
+    setShowManualEntry(false)
+    
+    if (!selectedTemplate) {
+      setSelectedTemplate('modern')
+    }
+    
+    alert('Manual text saved! Proceed to Step 2 to edit and translate.')
   }
   
   const handleNext = () => {
@@ -219,9 +248,66 @@ export default function Step1() {
       {/* Upload Status */}
       {(uploadError || uploadSuccess) && (
         <div className={`mb-6 p-4 rounded-lg ${uploadError ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-          <p className={uploadError ? 'text-red-800' : 'text-green-800'}>
-            {uploadError ? '❌ ' + uploadError : '✅ Resume uploaded successfully!'}
+          <div className="flex flex-col gap-2">
+            <p className={uploadError ? 'text-red-800' : 'text-green-800'}>
+              {uploadError ? '❌ ' + uploadError : '✅ Resume uploaded successfully!'}
+            </p>
+            
+            {/* Manual entry option when upload fails */}
+            {uploadError && !uploadSuccess && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setShowManualEntry(!showManualEntry)}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  {showManualEntry ? 'Hide manual entry' : '→ Enter resume text manually'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Manual Text Entry */}
+      {showManualEntry && (
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="text-lg font-medium text-blue-800 mb-3">Enter Resume Text</h3>
+          <p className="text-sm text-blue-600 mb-3">
+            Paste your resume text below. You can copy from a PDF viewer or Word document.
           </p>
+          <textarea
+            className="w-full h-64 p-3 border rounded-lg mb-3"
+            placeholder="Paste your resume text here...
+Example:
+John Doe
+Software Engineer
+john@example.com • (123) 456-7890
+
+EXPERIENCE
+Senior Developer, TechCorp (2020-Present)
+• Led team of 5 developers
+• Improved performance by 40%
+
+SKILLS
+Python, React, AWS"
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+          />
+          <div className="flex gap-3">
+            <button
+              onClick={handleUseManualText}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              disabled={!manualText.trim()}
+            >
+              Use This Text
+            </button>
+            <button
+              onClick={() => setShowManualEntry(false)}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
       
@@ -230,6 +316,9 @@ export default function Step1() {
         <div>
           <p className="text-gray-700">
             Selected: <span className="font-semibold">{selectedTemplate ? templates.find(t => t.id === selectedTemplate)?.name : 'None'}</span>
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            {!uploadSuccess ? 'Upload your resume or enter text manually, then proceed.' : 'Ready to proceed to Step 2.'}
           </p>
         </div>
         
@@ -251,7 +340,7 @@ export default function Step1() {
           <button
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             onClick={handleNext}
-            disabled={!selectedTemplate}
+            disabled={!selectedTemplate || !uploadSuccess}
           >
             Next: Fill & Translate →
           </button>
@@ -260,7 +349,13 @@ export default function Step1() {
       
       {/* Supported Formats */}
       <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-        <p className="font-medium">Supported: PDF, Word (.docx), TXT</p>
+        <p className="font-medium mb-1">📝 Tips for best results:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Text-based PDFs</strong> work best (not scanned/image PDFs)</li>
+          <li>If PDF parsing fails, try <strong>saving as Word (.docx)</strong> first</li>
+          <li>For scanned PDFs, use <strong>manual text entry</strong> (copy-paste from PDF viewer)</li>
+          <li>Maximum file size: <strong>10MB</strong></li>
+        </ul>
       </div>
     </div>
   )
